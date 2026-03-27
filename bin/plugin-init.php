@@ -73,16 +73,30 @@ if ($rootPath === false) {
 }
 
 [$updatedFiles, $totalReplacements] = applyTemplateReplacements($rootPath, $replacements, $dryRun);
+$renamedPaths = applyTemplatePathRenames($rootPath, $replacements, $dryRun);
 
 if ($dryRun) {
-    fwrite(STDOUT, "Dry run complete. {$totalReplacements} replacement(s) in ".count($updatedFiles)." file(s).\n");
+    fwrite(
+        STDOUT,
+        "Dry run complete. {$totalReplacements} replacement(s) in ".count($updatedFiles)." file(s), ".count($renamedPaths)." path rename(s).\n"
+    );
 } else {
-    fwrite(STDOUT, "Plugin initialized. {$totalReplacements} replacement(s) in ".count($updatedFiles)." file(s).\n");
+    fwrite(
+        STDOUT,
+        "Plugin initialized. {$totalReplacements} replacement(s) in ".count($updatedFiles)." file(s), ".count($renamedPaths)." path rename(s).\n"
+    );
 }
 
 if ($updatedFiles !== []) {
     foreach ($updatedFiles as $file) {
         fwrite(STDOUT, "- {$file}\n");
+    }
+}
+
+if ($renamedPaths !== []) {
+    fwrite(STDOUT, "Renamed paths:\n");
+    foreach ($renamedPaths as $rename) {
+        fwrite(STDOUT, "- {$rename}\n");
     }
 }
 
@@ -249,7 +263,7 @@ function applyTemplateReplacements(string $rootPath, array $replacements, bool $
         }
 
         $totalReplacements += $count;
-        $relative = ltrim(str_replace($rootPath, '', $path), DIRECTORY_SEPARATOR);
+        $relative = relativePath($rootPath, $path);
         $updatedFiles[] = $relative;
 
         if (! $dryRun) {
@@ -260,6 +274,155 @@ function applyTemplateReplacements(string $rootPath, array $replacements, bool $
     sort($updatedFiles);
 
     return [$updatedFiles, $totalReplacements];
+}
+
+function applyTemplatePathRenames(string $rootPath, array $replacements, bool $dryRun): array
+{
+    $renamedPaths = [];
+
+    $directoryRenames = collectDirectoryRenames($rootPath, $replacements);
+    foreach ($directoryRenames as $rename) {
+        if (! applyRename($rename['from'], $rename['to'], $dryRun)) {
+            continue;
+        }
+
+        $renamedPaths[] = relativePath($rootPath, $rename['from']).' -> '.relativePath($rootPath, $rename['to']);
+    }
+
+    $fileRenames = collectFileRenames($rootPath, $replacements);
+    foreach ($fileRenames as $rename) {
+        if (! applyRename($rename['from'], $rename['to'], $dryRun)) {
+            continue;
+        }
+
+        $renamedPaths[] = relativePath($rootPath, $rename['from']).' -> '.relativePath($rootPath, $rename['to']);
+    }
+
+    sort($renamedPaths);
+
+    return $renamedPaths;
+}
+
+function collectDirectoryRenames(string $rootPath, array $replacements): array
+{
+    $renames = [];
+
+    $directory = new RecursiveDirectoryIterator($rootPath, FilesystemIterator::SKIP_DOTS);
+    $filtered = new RecursiveCallbackFilterIterator(
+        $directory,
+        static function (SplFileInfo $entry): bool {
+            if (! $entry->isDir()) {
+                return false;
+            }
+
+            return ! in_array($entry->getFilename(), SKIP_DIRECTORIES, true);
+        }
+    );
+
+    $iterator = new RecursiveIteratorIterator($filtered, RecursiveIteratorIterator::SELF_FIRST);
+
+    foreach ($iterator as $entry) {
+        if (! $entry instanceof SplFileInfo || ! $entry->isDir()) {
+            continue;
+        }
+
+        $from = $entry->getPathname();
+        if ($from === $rootPath) {
+            continue;
+        }
+
+        $toName = renameTokenizedName($entry->getFilename(), $replacements);
+        if ($toName === '' || $toName === $entry->getFilename()) {
+            continue;
+        }
+
+        $renames[] = [
+            'from' => $from,
+            'to' => $entry->getPath().DIRECTORY_SEPARATOR.$toName,
+        ];
+    }
+
+    usort(
+        $renames,
+        static function (array $left, array $right): int {
+            return pathDepth($right['from']) <=> pathDepth($left['from']);
+        }
+    );
+
+    return $renames;
+}
+
+function collectFileRenames(string $rootPath, array $replacements): array
+{
+    $renames = [];
+
+    $directory = new RecursiveDirectoryIterator($rootPath, FilesystemIterator::SKIP_DOTS);
+    $filtered = new RecursiveCallbackFilterIterator(
+        $directory,
+        static function (SplFileInfo $entry): bool {
+            if ($entry->isDir()) {
+                return ! in_array($entry->getFilename(), SKIP_DIRECTORIES, true);
+            }
+
+            return ! in_array($entry->getFilename(), SKIP_FILES, true);
+        }
+    );
+
+    $iterator = new RecursiveIteratorIterator($filtered);
+
+    foreach ($iterator as $entry) {
+        if (! $entry instanceof SplFileInfo || ! $entry->isFile()) {
+            continue;
+        }
+
+        $toName = renameTokenizedName($entry->getFilename(), $replacements);
+        if ($toName === '' || $toName === $entry->getFilename()) {
+            continue;
+        }
+
+        $renames[] = [
+            'from' => $entry->getPathname(),
+            'to' => $entry->getPath().DIRECTORY_SEPARATOR.$toName,
+        ];
+    }
+
+    return $renames;
+}
+
+function renameTokenizedName(string $name, array $replacements): string
+{
+    $updated = str_replace(array_keys($replacements), array_values($replacements), $name);
+
+    return is_string($updated) ? $updated : $name;
+}
+
+function applyRename(string $from, string $to, bool $dryRun): bool
+{
+    if ($from === $to || ! file_exists($from)) {
+        return false;
+    }
+
+    if (file_exists($to)) {
+        fwrite(STDERR, "Skipping rename because destination exists: {$to}\n");
+
+        return false;
+    }
+
+    if ($dryRun) {
+        return true;
+    }
+
+    return rename($from, $to);
+}
+
+function pathDepth(string $path): int
+{
+    return substr_count($path, DIRECTORY_SEPARATOR);
+}
+
+function relativePath(string $rootPath, string $path): string
+{
+    return ltrim(str_replace($rootPath, '', $path), DIRECTORY_SEPARATOR);
 }
 
 function confirmAction(string $question, bool $defaultNo, bool $noInteraction): bool

@@ -18,7 +18,7 @@ Example:
 composer template:init -- --vendor=shazzoo --name="Cookie Banner"
 ```
 
-This updates placeholders like:
+This updates placeholders in file contents and renames template file/folder paths like:
 
 - `plugin-name` -> `cookie-banner`
 - `PluginName` -> `CookieBanner`
@@ -26,6 +26,8 @@ This updates placeholders like:
 - `TemplateVendor\\PluginName` -> `Shazzoo\\CookieBanner`
 - `template-vendor-plugin-name` -> `shazzoo-cookie-banner`
 - `x-template-vendor-plugin-name::...` -> `x-shazzoo-cookie-banner::...`
+- `src/PluginName.php` -> `src/CookieBanner.php`
+- `src/PluginNameServiceProvider.php` -> `src/CookieBannerServiceProvider.php`
 
 ## Command options
 
@@ -40,6 +42,8 @@ Useful flags:
 - `--dry-run` shows what would change without writing files
 - `--no-interaction` disables prompts (cleanup defaults to no)
 - `--help` shows usage
+
+Dry-run output includes both content replacement counts and path rename counts.
 
 After a successful run, the command asks if you want to remove the initializer (`bin/plugin-init.php`) and its Composer scripts from the new repo.
 
