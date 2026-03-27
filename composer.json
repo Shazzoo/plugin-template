@@ -1,0 +1,20 @@
+{
+  "name": "template-vendor/plugin-name",
+  "type": "library",
+  "autoload": {
+    "psr-4": {
+      "TemplateVendor\\PluginName\\": "src/"
+    }
+  },
+  "scripts": {
+    "template:init": "@php bin/plugin-init.php",
+    "plugin:init": "@template:init"
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "TemplateVendor\\PluginName\\PluginNameServiceProvider"
+      ]
+    }
+  }
+}

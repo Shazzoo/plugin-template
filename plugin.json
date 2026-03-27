@@ -1,0 +1,16 @@
+{
+  "key": "template-vendor/plugin-name",
+  "name": "PluginName",
+  "description": "PluginName plugin",
+  "version": "1.0.0",
+  "provider": "TemplateVendor\\PluginName\\PluginNameServiceProvider",
+  "class": "TemplateVendor\\PluginName\\PluginName",
+  "slug": "plugin-name",
+  "vite": {
+    "input": [
+      "resources/css/app.css",
+      "resources/js/app.js"
+    ],
+    "outDir": "public/build/plugins/plugin-name"
+  }
+}
